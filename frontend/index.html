@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>FocusGuard — AI Student Focus Monitor</title>
+<meta name="description" content="Real-time AI-powered student focus monitoring with computer vision, voice reminders, and session analytics."/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet"/>
+<style>
+/* ════════════════════════════════════════════════════════
+   GLOBAL RESET & BASE
+════════════════════════════════════════════════════════ */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#080b14;
+  --surface:#0d1120;
+  --surface2:#111827;
+  --border:#1c2744;
+  --border2:#243058;
+  --accent:#00d4ff;
+  --accent2:#0099cc;
+  --green:#00e676;
+  --green2:#00c853;
+  --orange:#ff9800;
+  --red:#f44336;
+  --text:#e2e8f0;
+  --text2:#94a3b8;
+  --text3:#4a5568;
+  --font:'Inter',sans-serif;
+  --mono:'JetBrains Mono',monospace;
+  --radius:12px;
+  --shadow:0 8px 32px rgba(0,0,0,0.4);
+}
+html{scroll-behavior:smooth}
+body{
+  font-family:var(--font);
+  background:var(--bg);
+  color:var(--text);
+  min-height:100vh;
+  overflow-x:hidden;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar{width:6px}
+::-webkit-scrollbar-track{background:var(--surface)}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:4px}
+
+/* ════════════════════════════════════════════════════════
+   TOPBAR
+════════════════════════════════════════════════════════ */
+.topbar{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 28px;height:60px;
+  background:linear-gradient(90deg,#090d1c 0%,#0c1226 100%);
+  border-bottom:1px solid var(--border);
+  position:sticky;top:0;z-index:100;
+  backdrop-filter:blur(12px);
+}
+.topbar-logo{
+  display:flex;align-items:center;gap:10px;
+}
+.topbar-logo .icon{
+  width:34px;height:34px;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  border-radius:8px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:18px;
+}
+.topbar-logo h1{
+  font-size:1.2rem;font-weight:800;letter-spacing:-0.3px;
+  background:linear-gradient(90deg,#e2e8f0,var(--accent));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+}
+.topbar-status{
+  display:flex;align-items:center;gap:8px;
+  font-size:0.78rem;color:var(--text2);
+  font-family:var(--mono);
+}
+.status-dot{
+  width:8px;height:8px;border-radius:50%;
+  background:var(--text3);
+  transition:background 0.3s;
+}
+.status-dot.active{background:var(--green);box-shadow:0 0 8px var(--green);}
+.status-dot.error{background:var(--red);box-shadow:0 0 8px var(--red);}
+.topbar-nav{display:flex;gap:4px}
+.nav-btn{
+  background:none;border:1px solid var(--border);color:var(--text2);
+  padding:6px 16px;border-radius:8px;font-size:0.8rem;cursor:pointer;
+  font-family:var(--font);transition:all 0.2s;
+}
+.nav-btn:hover,.nav-btn.active{
+  background:var(--surface2);border-color:var(--border2);color:var(--text);
+}
+
+/* ════════════════════════════════════════════════════════
+   LAYOUT
+════════════════════════════════════════════════════════ */
+.app{display:flex;height:calc(100vh - 60px);overflow:hidden}
+
+/* ── SIDEBAR ── */
+.sidebar{
+  width:280px;min-width:280px;
+  background:var(--surface);
+  border-right:1px solid var(--border);
+  display:flex;flex-direction:column;
+  overflow-y:auto;
+  padding:20px 16px;
+  gap:20px;
+}
+.sidebar-section{display:flex;flex-direction:column;gap:10px}
+.sidebar-section-title{
+  font-size:0.68rem;font-weight:700;text-transform:uppercase;
+  letter-spacing:1.5px;color:var(--text3);
+  padding-bottom:6px;border-bottom:1px solid var(--border);
+}
+
+/* Controls */
+.form-group{display:flex;flex-direction:column;gap:4px}
+.form-group label{font-size:0.75rem;color:var(--text2);font-weight:500}
+.form-group select,.form-group input[type=range]{
+  background:var(--surface2);border:1px solid var(--border);
+  color:var(--text);border-radius:8px;padding:8px 10px;
+  font-family:var(--font);font-size:0.82rem;
+  outline:none;width:100%;
+}
+.form-group select:focus,.form-group input:focus{border-color:var(--accent)}
+.range-row{display:flex;align-items:center;gap:8px}
+.range-val{
+  font-family:var(--mono);font-size:0.75rem;color:var(--accent);
+  min-width:30px;text-align:right;
+}
+input[type=range]{
+  padding:4px 0;cursor:pointer;accent-color:var(--accent);
+}
+
+/* Buttons */
+.btn{
+  width:100%;padding:12px 16px;border-radius:var(--radius);
+  border:none;font-family:var(--font);font-size:0.88rem;font-weight:700;
+  cursor:pointer;transition:all 0.2s;letter-spacing:0.3px;
+  display:flex;align-items:center;justify-content:center;gap:8px;
+}
+.btn-start{
+  background:linear-gradient(135deg,#00c853,#009624);
+  color:#fff;box-shadow:0 4px 20px rgba(0,200,83,0.3);
+}
+.btn-start:hover:not(:disabled){
+  transform:translateY(-1px);box-shadow:0 6px 28px rgba(0,200,83,0.5);
+}
+.btn-stop{
+  background:linear-gradient(135deg,#f44336,#b71c1c);
+  color:#fff;box-shadow:0 4px 20px rgba(244,67,54,0.3);
+}
+.btn-stop:hover:not(:disabled){transform:translateY(-1px)}
+.btn:disabled{opacity:0.4;cursor:not-allowed;transform:none!important}
+
+/* Sidebar metrics */
+.mini-metric{
+  background:var(--surface2);border:1px solid var(--border);
+  border-radius:10px;padding:10px 12px;
+  display:flex;flex-direction:column;gap:2px;
+}
+.mini-metric-label{font-size:0.68rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px}
+.mini-metric-value{font-size:1.3rem;font-weight:800;font-family:var(--mono);color:var(--text)}
+.mini-metric-value.green{color:var(--green)}
+.mini-metric-value.red{color:var(--red)}
+.mini-metric-value.orange{color:var(--orange)}
+
+/* ── MAIN AREA ── */
+.main{
+  flex:1;display:flex;flex-direction:column;
+  overflow:hidden;
+}
+
+/* ── BANNER ── */
+.banner{
+  padding:14px 24px;
+  font-size:1rem;font-weight:700;
+  display:flex;align-items:center;justify-content:center;gap:10px;
+  transition:all 0.4s;min-height:52px;
+  letter-spacing:0.3px;
+}
+.banner.focused{background:linear-gradient(90deg,#003d1a,#004d22);color:var(--green);border-bottom:1px solid #00c85344}
+.banner.distracted{background:linear-gradient(90deg,#3d2000,#4d2a00);color:var(--orange);border-bottom:1px solid #ff980044}
+.banner.away{
+  background:linear-gradient(90deg,#3d0000,#4d0000);color:#ff6b6b;
+  border-bottom:1px solid #f4433644;
+  animation:flashbg 1s infinite;
+}
+.banner.idle{background:var(--surface);color:var(--text2);border-bottom:1px solid var(--border)}
+@keyframes flashbg{0%,100%{opacity:1}50%{opacity:0.75}}
+.banner-hook{
+  font-size:0.78rem;font-weight:400;opacity:0.85;
+  font-style:italic;margin-left:12px;color:inherit;
+}
+
+/* ── CONTENT PANELS ── */
+.content{
+  flex:1;display:grid;
+  grid-template-columns:1fr 360px;
+  grid-template-rows:1fr auto;
+  gap:0;overflow:hidden;
+}
+.cam-panel{
+  background:#000;position:relative;
+  display:flex;align-items:center;justify-content:center;
+  overflow:hidden;border-right:1px solid var(--border);
+}
+.cam-panel img{
+  width:100%;height:100%;object-fit:contain;
+  display:block;
+}
+.cam-overlay{
+  position:absolute;top:10px;left:10px;
+  display:flex;gap:8px;flex-wrap:wrap;
+}
+.cam-badge{
+  background:rgba(0,0,0,0.7);border:1px solid var(--border2);
+  padding:4px 10px;border-radius:20px;
+  font-size:0.7rem;font-family:var(--mono);color:var(--accent);
+}
+.cam-badge.live{color:var(--red);border-color:var(--red)44}
+.cam-badge.live::before{content:'● ';animation:blink 1s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+
+/* ── METRICS PANEL ── */
+.metrics-panel{
+  background:var(--surface);
+  padding:20px 18px;
+  display:flex;flex-direction:column;gap:16px;
+  overflow-y:auto;
+  border-bottom:1px solid var(--border);
+}
+.metrics-title{font-size:0.75rem;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:1.5px}
+
+/* Gauge */
+.gauge-wrap{display:flex;flex-direction:column;align-items:center;gap:4px}
+.gauge-svg{width:100%;max-width:240px}
+.gauge-score-text{
+  font-size:2.6rem;font-weight:900;font-family:var(--mono);
+  background:linear-gradient(135deg,var(--accent),var(--green));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  line-height:1;
+}
+.gauge-label{font-size:0.72rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px}
+
+/* Stat grid */
+.stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.stat-card{
+  background:var(--surface2);border:1px solid var(--border);
+  border-radius:10px;padding:10px 12px;
+  display:flex;flex-direction:column;gap:2px;
+}
+.stat-label{font-size:0.65rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px}
+.stat-value{font-size:1.15rem;font-weight:800;font-family:var(--mono);color:var(--text)}
+.stat-value.g{color:var(--green)}
+.stat-value.r{color:var(--red)}
+.stat-value.o{color:var(--orange)}
+.stat-value.b{color:var(--accent)}
+
+/* Progress bar */
+.progress-wrap{display:flex;flex-direction:column;gap:5px}
+.progress-label{
+  font-size:0.72rem;color:var(--text2);
+  display:flex;justify-content:space-between;
+}
+.progress-bar{
+  height:6px;background:var(--surface2);border-radius:3px;overflow:hidden;
+}
+.progress-fill{
+  height:100%;border-radius:3px;transition:width 0.3s,background 0.3s;
+  background:var(--green);
+}
+.progress-fill.away{background:var(--red)}
+.progress-fill.distracted{background:var(--orange)}
+
+/* ── HISTORY PANEL ── */
+.history-panel{
+  grid-column:1/-1;
+  background:var(--surface);
+  border-top:1px solid var(--border);
+  padding:18px 24px;
+  display:flex;flex-direction:column;gap:14px;
+  max-height:260px;overflow-y:auto;
+}
+.history-header{
+  display:flex;align-items:center;justify-content:space-between;
+}
+.history-title{font-size:0.88rem;font-weight:700;color:var(--text)}
+.refresh-btn{
+  background:none;border:1px solid var(--border);color:var(--text2);
+  padding:4px 12px;border-radius:8px;font-size:0.75rem;cursor:pointer;
+  font-family:var(--font);transition:all 0.2s;
+}
+.refresh-btn:hover{background:var(--surface2);color:var(--text)}
+
+/* Stats row */
+.agg-row{display:flex;gap:12px;flex-wrap:wrap}
+.agg-card{
+  background:var(--surface2);border:1px solid var(--border);
+  border-radius:10px;padding:10px 16px;
+  display:flex;flex-direction:column;gap:1px;flex:1;min-width:100px;
+}
+.agg-card-label{font-size:0.62rem;color:var(--text3);text-transform:uppercase;letter-spacing:1px}
+.agg-card-val{font-size:1.1rem;font-weight:800;font-family:var(--mono);color:var(--accent)}
+
+/* Table */
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:0.78rem}
+thead th{
+  text-align:left;padding:8px 12px;
+  color:var(--text3);font-weight:600;text-transform:uppercase;letter-spacing:0.8px;font-size:0.65rem;
+  border-bottom:1px solid var(--border);
+}
+tbody tr{border-bottom:1px solid var(--border)22;transition:background 0.15s}
+tbody tr:hover{background:var(--surface2)}
+tbody td{padding:7px 12px;color:var(--text2);font-family:var(--mono);font-size:0.76rem}
+.score-badge{
+  display:inline-block;padding:2px 8px;border-radius:12px;
+  font-size:0.72rem;font-weight:700;
+}
+.score-badge.high{background:#00c85322;color:var(--green)}
+.score-badge.mid{background:#ff980022;color:var(--orange)}
+.score-badge.low{background:#f4433622;color:var(--red)}
+
+/* ════════════════════════════════════════════════════════
+   TOAST NOTIFICATIONS
+════════════════════════════════════════════════════════ */
+.toast-container{
+  position:fixed;bottom:24px;right:24px;
+  display:flex;flex-direction:column;gap:8px;z-index:999;
+}
+.toast{
+  background:var(--surface2);border:1px solid var(--border2);
+  border-radius:10px;padding:12px 18px;
+  font-size:0.82rem;color:var(--text);max-width:300px;
+  box-shadow:var(--shadow);animation:slideIn 0.3s ease;
+  display:flex;align-items:center;gap:8px;
+}
+.toast.success{border-color:var(--green)44;color:var(--green)}
+.toast.error{border-color:var(--red)44;color:var(--red)}
+.toast.warning{border-color:var(--orange)44;color:var(--orange)}
+@keyframes slideIn{from{transform:translateX(100px);opacity:0}to{transform:none;opacity:1}}
+@keyframes fadeOut{to{transform:translateX(100px);opacity:0}}
+
+/* ════════════════════════════════════════════════════════
+   RESPONSIVE
+════════════════════════════════════════════════════════ */
+@media(max-width:1100px){
+  .content{grid-template-columns:1fr}
+  .metrics-panel{display:none}
+}
+@media(max-width:768px){
+  .sidebar{width:240px;min-width:240px}
+}
+</style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<header class="topbar">
+  <div class="topbar-logo">
+    <div class="icon">🎯</div>
+    <h1>FocusGuard</h1>
+  </div>
+  <div class="topbar-status">
+    <div class="status-dot" id="statusDot"></div>
+    <span id="statusText">Offline</span>
+    &nbsp;|&nbsp;
+    <span id="fpsText">0.0 FPS</span>
+  </div>
+  <nav class="topbar-nav">
+    <button class="nav-btn active" onclick="showPanel('monitor')">Monitor</button>
+    <button class="nav-btn" onclick="showPanel('history')">History</button>
+  </nav>
+</header>
+
+<div class="app">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-section-title">Session Controls</div>
+
+      <div class="form-group">
+        <label>📷 Camera Device</label>
+        <select id="cameraId">
+          <option value="0">Camera 0 (Default)</option>
+          <option value="1">Camera 1</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>🎙️ Voice Personality</label>
+        <select id="voiceStyle">
+          <option value="Motivational">Motivational</option>
+          <option value="Professional">Professional</option>
+          <option value="Tamil-English">Tamil-English</option>
+          <option value="Funny">Funny</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label>⏱️ Absence Threshold</label>
+        <div class="range-row">
+          <input type="range" id="absenceLimit" min="1" max="12" step="0.5" value="4"
+                 oninput="document.getElementById('absenceVal').textContent=this.value+'s'"/>
+          <span class="range-val" id="absenceVal">4s</span>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>👀 Distraction Threshold</label>
+        <div class="range-row">
+          <input type="range" id="distractionLimit" min="1" max="12" step="0.5" value="4"
+                 oninput="document.getElementById('distractionVal').textContent=this.value+'s'"/>
+          <span class="range-val" id="distractionVal">4s</span>
+        </div>
+      </div>
+
+      <button class="btn btn-start" id="startBtn" onclick="startSession()">▶ Start Session</button>
+      <button class="btn btn-stop" id="stopBtn" onclick="stopSession()" disabled>⏹ End Session</button>
+    </div>
+
+    <div class="sidebar-section">
+      <div class="sidebar-section-title">Live Stats</div>
+      <div class="mini-metric">
+        <span class="mini-metric-label">Focus Score</span>
+        <span class="mini-metric-value green" id="sb_score">—</span>
+      </div>
+      <div class="mini-metric">
+        <span class="mini-metric-label">Current State</span>
+        <span class="mini-metric-value" id="sb_state">IDLE</span>
+      </div>
+      <div class="mini-metric">
+        <span class="mini-metric-label">Study Time</span>
+        <span class="mini-metric-value" id="sb_time">00:00</span>
+      </div>
+      <div class="mini-metric">
+        <span class="mini-metric-label">Reminders Fired</span>
+        <span class="mini-metric-value" id="sb_reminders">0</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+
+    <!-- STATUS BANNER -->
+    <div class="banner idle" id="banner">
+      🔒 Camera Offline — Click <b style="margin:0 4px">▶ Start Session</b> to begin AI monitoring
+    </div>
+
+    <!-- CONTENT GRID -->
+    <div class="content" id="monitorPanel">
+
+      <!-- CAMERA FEED -->
+      <div class="cam-panel">
+        <img id="camFeed" src="/static/placeholder.jpg"
+             alt="Live Camera Feed" onerror="this.src=''"/>
+        <div class="cam-overlay">
+          <span class="cam-badge live" id="liveBadge" style="display:none">LIVE</span>
+          <span class="cam-badge" id="fpsBadge">0 FPS</span>
+          <span class="cam-badge" id="stateBadge">IDLE</span>
+        </div>
+      </div>
+
+      <!-- METRICS PANEL -->
+      <div class="metrics-panel">
+        <div class="metrics-title">📊 Real-Time Analytics</div>
+
+        <!-- Gauge -->
+        <div class="gauge-wrap">
+          <div class="gauge-score-text" id="gaugeScore">—</div>
+          <div class="gauge-label">Attention Score</div>
+          <div class="progress-bar" style="width:100%;height:10px;margin-top:6px">
+            <div class="progress-fill" id="scoreFill" style="width:0%"></div>
+          </div>
+        </div>
+
+        <!-- Stats -->
+        <div class="stat-grid">
+          <div class="stat-card">
+            <span class="stat-label">⏱ Total Time</span>
+            <span class="stat-value b" id="m_total">00:00</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">🔔 Reminders</span>
+            <span class="stat-value o" id="m_reminders">0</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">✅ Focused</span>
+            <span class="stat-value g" id="m_focused">00:00</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-label">🚨 Away</span>
+            <span class="stat-value r" id="m_away">00:00</span>
+          </div>
+          <div class="stat-card" style="grid-column:1/-1">
+            <span class="stat-label">👀 Distracted</span>
+            <span class="stat-value o" id="m_distracted">00:00</span>
+          </div>
+        </div>
+
+        <!-- Timer progress -->
+        <div class="progress-wrap" id="timerProgress" style="display:none">
+          <div class="progress-label">
+            <span id="timerLabel">Timer</span>
+            <span id="timerVal">0s</span>
+          </div>
+          <div class="progress-bar">
+            <div class="progress-fill" id="timerFill" style="width:0%"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- HISTORY PANEL -->
+      <div class="history-panel" id="historySection">
+        <div class="history-header">
+          <span class="history-title">📋 Session History</span>
+          <button class="refresh-btn" onclick="loadHistory()">↺ Refresh</button>
+        </div>
+        <div class="agg-row" id="aggRow">
+          <div class="agg-card"><div class="agg-card-label">Sessions</div><div class="agg-card-val" id="agg_sessions">—</div></div>
+          <div class="agg-card"><div class="agg-card-label">Study Time</div><div class="agg-card-val" id="agg_time">—</div></div>
+          <div class="agg-card"><div class="agg-card-label">Avg Focus</div><div class="agg-card-val" id="agg_focus">—</div></div>
+          <div class="agg-card"><div class="agg-card-label">Reminders</div><div class="agg-card-val" id="agg_reminders">—</div></div>
+        </div>
+        <div class="table-wrap">
+          <table id="historyTable">
+            <thead>
+              <tr>
+                <th>#</th><th>Start Time</th><th>Duration</th>
+                <th>Focused</th><th>Away</th><th>Focus Score</th><th>Reminders</th>
+              </tr>
+            </thead>
+            <tbody id="historyBody">
+              <tr><td colspan="7" style="text-align:center;color:var(--text3);padding:20px">No sessions yet</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div><!-- /content -->
+
+  </main><!-- /main -->
+</div><!-- /app -->
+
+<!-- TOAST CONTAINER -->
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+/* ════════════════════════════════════════════════════════
+   UTILITIES
+════════════════════════════════════════════════════════ */
+const $ = id => document.getElementById(id);
+
+function fmtTime(sec) {
+  const s = Math.floor(sec);
+  const m = Math.floor(s / 60);
+  return `${String(m).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
+}
+
+function toast(msg, type='info', duration=3000) {
+  const c = $('toastContainer');
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  const icons = {success:'✅', error:'❌', warning:'⚠️', info:'ℹ️'};
+  el.innerHTML = `<span>${icons[type]||''}</span><span>${msg}</span>`;
+  c.appendChild(el);
+  setTimeout(() => {
+    el.style.animation = 'fadeOut 0.3s forwards';
+    setTimeout(() => el.remove(), 300);
+  }, duration);
+}
+
+/* ════════════════════════════════════════════════════════
+   STATE
+════════════════════════════════════════════════════════ */
+let ws = null;
+let sessionRunning = false;
+let absLimit = 4.0;
+let distLimit = 4.0;
+
+/* ════════════════════════════════════════════════════════
+   SESSION CONTROL
+════════════════════════════════════════════════════════ */
+async function startSession() {
+  absLimit  = parseFloat($('absenceLimit').value);
+  distLimit = parseFloat($('distractionLimit').value);
+
+  const payload = {
+    camera_id:        parseInt($('cameraId').value),
+    voice_style:      $('voiceStyle').value,
+    absence_limit:    absLimit,
+    distraction_limit: distLimit,
+  };
+
+  try {
+    const res = await fetch('/api/session/start', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (data.status === 'started' || data.status === 'already_running') {
+      sessionRunning = true;
+      $('startBtn').disabled = true;
+      $('stopBtn').disabled  = false;
+
+      // Switch MJPEG stream source
+      const feed = $('camFeed');
+      feed.src = '/video_feed?' + Date.now();
+
+      // Connect WebSocket
+      connectWS();
+
+      $('liveBadge').style.display = '';
+      $('statusDot').className = 'status-dot active';
+      $('statusText').textContent = 'Live';
+      toast('Session started! AI monitoring active.', 'success');
+    }
+  } catch(e) {
+    toast('Failed to start session: ' + e.message, 'error');
+  }
+}
+
+async function stopSession() {
+  try {
+    await fetch('/api/session/stop', {method:'POST'});
+    sessionRunning = false;
+    $('startBtn').disabled = false;
+    $('stopBtn').disabled  = true;
+
+    // Disconnect ws
+    if (ws) { ws.close(); ws = null; }
+
+    $('camFeed').src = '';
+    $('liveBadge').style.display = 'none';
+    $('statusDot').className = 'status-dot';
+    $('statusText').textContent = 'Offline';
+
+    setBanner('idle', '🔒 Session ended. Click ▶ Start Session to begin again.');
+    toast('Session ended and saved!', 'success');
+    loadHistory();
+  } catch(e) {
+    toast('Stop failed: ' + e.message, 'error');
+  }
+}
+
+/* ════════════════════════════════════════════════════════
+   WEBSOCKET — live metrics
+════════════════════════════════════════════════════════ */
+function connectWS() {
+  if (ws) ws.close();
+  ws = new WebSocket(`ws://${location.host}/ws`);
+
+  ws.onmessage = e => {
+    const d = JSON.parse(e.data);
+    if (d.type === 'metrics') updateMetrics(d);
+  };
+
+  ws.onclose = () => {
+    if (sessionRunning) {
+      setTimeout(connectWS, 1500); // auto-reconnect
+    }
+  };
+
+  ws.onerror = () => {
+    $('statusDot').className = 'status-dot error';
+    $('statusText').textContent = 'WS Error';
+  };
+}
+
+/* ════════════════════════════════════════════════════════
+   UPDATE UI FROM METRICS
+════════════════════════════════════════════════════════ */
+function updateMetrics(d) {
+  const state = d.state || 'IDLE';
+  const score = (d.focus_score || 0).toFixed(1);
+  const fps   = (d.fps || 0).toFixed(1);
+
+  // Banner
+  if (state === 'AWAY') {
+    setBanner('away', `🚨 PERSON MISSING FROM FRAME! <span class="banner-hook">${d.hook||''}</span>`);
+  } else if (state === 'DISTRACTED') {
+    setBanner('distracted', `👀 DISTRACTION DETECTED! <span class="banner-hook">${d.hook||''}</span>`);
+  } else if (state === 'FOCUSED') {
+    setBanner('focused', '✅ STUDENT ACTIVELY FOCUSED IN STUDY ZONE');
+  }
+
+  // Gauge
+  const scoreNum = parseFloat(score);
+  $('gaugeScore').textContent = score + '%';
+  const fill = $('scoreFill');
+  fill.style.width = scoreNum + '%';
+  fill.className = 'progress-fill' + (scoreNum >= 75 ? '' : scoreNum >= 45 ? ' distracted' : ' away');
+
+  // Sidebar
+  $('sb_score').textContent      = score + '%';
+  $('sb_state').textContent      = state;
+  $('sb_time').textContent       = fmtTime(d.total_seconds||0);
+  $('sb_reminders').textContent  = d.reminders_triggered||0;
+
+  // Metric cards
+  $('m_total').textContent      = fmtTime(d.total_seconds||0);
+  $('m_focused').textContent    = fmtTime(d.focused_seconds||0);
+  $('m_away').textContent       = fmtTime(d.away_seconds||0);
+  $('m_distracted').textContent = fmtTime(d.distracted_seconds||0);
+  $('m_reminders').textContent  = d.reminders_triggered||0;
+
+  // FPS + badges
+  $('fpsText').textContent = fps + ' FPS';
+  $('fpsBadge').textContent = fps + ' FPS';
+  $('stateBadge').textContent = state;
+
+  // Timer progress bar
+  const timerProg = $('timerProgress');
+  if (d.away_timer > 0) {
+    timerProg.style.display = '';
+    $('timerLabel').textContent = '⏳ Absence Timer';
+    $('timerVal').textContent = d.away_timer + 's';
+    $('timerFill').style.width = Math.min(100, (d.away_timer/absLimit)*100) + '%';
+    $('timerFill').className = 'progress-fill away';
+  } else if (d.distraction_timer > 0) {
+    timerProg.style.display = '';
+    $('timerLabel').textContent = '👀 Distraction Timer';
+    $('timerVal').textContent = d.distraction_timer + 's';
+    $('timerFill').style.width = Math.min(100, (d.distraction_timer/distLimit)*100) + '%';
+    $('timerFill').className = 'progress-fill distracted';
+  } else {
+    timerProg.style.display = 'none';
+  }
+}
+
+function setBanner(type, html) {
+  const b = $('banner');
+  b.className = 'banner ' + type;
+  b.innerHTML = html;
+}
+
+/* ════════════════════════════════════════════════════════
+   HISTORY
+════════════════════════════════════════════════════════ */
+async function loadHistory() {
+  try {
+    const res  = await fetch('/api/history?limit=15');
+    const data = await res.json();
+    const stats = data.stats || {};
+    const sessions = data.sessions || [];
+
+    $('agg_sessions').textContent  = stats.total_sessions || 0;
+    $('agg_time').textContent      = ((stats.total_duration||0)/60).toFixed(1) + ' min';
+    $('agg_focus').textContent     = (stats.avg_focus_score||0).toFixed(1) + '%';
+    $('agg_reminders').textContent = stats.total_reminders || 0;
+
+    const tbody = $('historyBody');
+    if (!sessions.length) {
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:20px">No sessions recorded yet</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = sessions.map(s => {
+      const sc = s.focus_score || 0;
+      const cls = sc >= 75 ? 'high' : sc >= 45 ? 'mid' : 'low';
+      return `<tr>
+        <td>${s.id}</td>
+        <td>${(s.start_time||'').slice(0,16)}</td>
+        <td>${fmtTime(s.duration_seconds||0)}</td>
+        <td style="color:var(--green)">${fmtTime(s.focused_seconds||0)}</td>
+        <td style="color:var(--red)">${fmtTime(s.away_seconds||0)}</td>
+        <td><span class="score-badge ${cls}">${sc.toFixed(1)}%</span></td>
+        <td>${s.reminders_triggered||0}</td>
+      </tr>`;
+    }).join('');
+  } catch(e) {
+    console.warn('History load failed:', e);
+  }
+}
+
+function showPanel(name) {
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+  // Future: toggle history panel full-screen
+}
+
+/* ════════════════════════════════════════════════════════
+   INIT
+════════════════════════════════════════════════════════ */
+loadHistory();
+</script>
+</body>
+</html>
